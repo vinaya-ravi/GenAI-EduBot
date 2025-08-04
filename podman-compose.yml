@@ -1,0 +1,35 @@
+version: "3"
+
+services:
+  vllm-server:
+    image: vllm/vllm-openai:latest
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 4
+              device_ids: ["4", "5", "6", "7"]
+              capabilities: [gpu]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    environment:
+    #changes removed
+      - HUGGING_FACE_HUB_TOKEN=<token>
+      - NVIDIA_VISIBLE_DEVICES=4,5,6,7
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - NVIDIA_REQUIRE_CUDA=cuda>=12.0
+      - VLLM_LOG_LEVEL=info   
+    ipc: host
+    command: >
+      python -m vllm.entrypoints.openai.api_server
+      --host 0.0.0.0
+      --port 8000
+      --model google/gemma-3-27b-it
+      --tensor-parallel-size 4
+      --max-model-len 4096
+      --trust-remote-code
+      --gpu-memory-utilization 0.3

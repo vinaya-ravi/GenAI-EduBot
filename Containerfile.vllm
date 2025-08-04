@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1
+
+# ---------- base ----------
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+# ---------- system ----------
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-dev git curl ca-certificates build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+# ensure "python" points to python3
+RUN ln -sf /usr/bin/python3 /usr/bin/python && \
+    pip3 install --upgrade pip
+
+# ---------- python ----------
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 && \
+    pip install --no-cache-dir vllm==0.8.4 && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ---------- optional model cache ----------
+RUN mkdir -p /home/models
+
+# ---------- runtime ----------
+# Configure NVIDIA runtime
+ENV CUDA_VISIBLE_DEVICES=4,5,6,7 \
+    NVIDIA_VISIBLE_DEVICES=4,5,6,7 \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    NVIDIA_REQUIRE_CUDA="cuda>=12.4" \
+    VLLM_USE_CUDA_GRAPH=1 \
+    VLLM_GPU_MEMORY_UTILIZATION=0.5 \
+    VLLM_LOGGING_LEVEL=DEBUG \
+    VLLM_DEVICE=cuda \
+    TORCH_DYNAMO_DISABLE=1
+
+EXPOSE 5000
+
+CMD ["python", "-m", "vllm.entrypoints.openai.api_server", \
+    "--host", "0.0.0.0", "--port", "5000", \
+    "--model", "google/gemma-3-27b-it", \
+    "--tensor-parallel-size", "4", \
+    "--max-model-len", "4096", \
+    "--trust-remote-code", \
+    "--gpu-memory-utilization", "0.5", \
+    "--device", "cuda"]

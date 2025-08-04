@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  vllm-server:
+    image: vllm-server:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.vllm
+    ports:
+      - "5000:5000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 4
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0,1,2,3
+    networks:
+      - ai-network
+
+  chainlit-app:
+    image: chainlit-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_ID=google/gemma-3-27b-it
+      - INFERENCE_SERVER_URL=http://vllm-server:5000/v1
+      - MAX_RETRIES=3
+      - RETRY_DELAY=2
+      - REQUEST_TIMEOUT=30
+    depends_on:
+      - vllm-server
+    networks:
+      - ai-network
+
+networks:
+  ai-network:
+    driver: bridge
